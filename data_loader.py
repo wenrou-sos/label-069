@@ -182,6 +182,64 @@ def get_book_rankings(sales_df, books_df):
     
     return best_sellers, worst_sellers
 
+def get_multiple_books_data(sales_df, books_df, ratings_df, isbn_list):
+    all_monthly = []
+    comparison_data = []
+    best_sellers, worst_sellers = get_book_rankings(sales_df, books_df)
+    best_isbns = set(best_sellers['ISBN'].values)
+    worst_isbns = set(worst_sellers['ISBN'].values)
+    
+    for isbn in isbn_list:
+        book_info = books_df[books_df['ISBN'] == isbn].iloc[0] if len(books_df[books_df['ISBN'] == isbn]) > 0 else None
+        if book_info is None:
+            continue
+        
+        book_sales = sales_df[sales_df['ISBN'] == isbn].copy()
+        book_sales['年月'] = book_sales.apply(lambda x: f"{x['年份']}-{x['月份']:02d}", axis=1)
+        
+        monthly_sales = book_sales.groupby('年月').agg({
+            '销量': 'sum',
+            '营收': 'sum'
+        }).reset_index().sort_values('年月')
+        monthly_sales['ISBN'] = isbn
+        monthly_sales['书名'] = book_info['书名']
+        all_monthly.append(monthly_sales)
+        
+        book_ratings = ratings_df[ratings_df['ISBN'] == isbn]
+        avg_rating = book_ratings['评分'].mean() if len(book_ratings) > 0 else 0
+        
+        tag = ''
+        if isbn in best_isbns:
+            tag = '畅销书'
+        elif isbn in worst_isbns:
+            tag = '滞销书'
+        
+        comparison_data.append({
+            'ISBN': isbn,
+            '书名': book_info['书名'],
+            '作者': book_info['作者'],
+            '品类': book_info['品类'],
+            '定价': book_info['定价'],
+            '总销量': int(book_sales['销量'].sum()),
+            '总营收': float(book_sales['营收'].sum()),
+            '平均评分': round(avg_rating, 2),
+            '评价人数': len(book_ratings),
+            '平均单价': round(float(book_sales['营收'].sum()) / int(book_sales['销量'].sum()), 2) if book_sales['销量'].sum() > 0 else 0,
+            '标签': tag
+        })
+    
+    if len(all_monthly) > 0:
+        all_monthly_df = pd.concat(all_monthly, ignore_index=True)
+    else:
+        all_monthly_df = pd.DataFrame()
+    
+    comparison_df = pd.DataFrame(comparison_data)
+    
+    return {
+        'monthly_sales': all_monthly_df,
+        'comparison': comparison_df
+    }
+
 def get_available_years(sales_df):
     return sorted(sales_df['年份'].unique())
 
