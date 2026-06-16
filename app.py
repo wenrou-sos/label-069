@@ -921,15 +921,24 @@ elif page == "📖 单品分析":
     else:
         st.info("💡 选择 2-4 本书进行对比分析。可以在搜索框中输入书名或ISBN快速定位。")
         
+        if 'compare_triggered' not in st.session_state:
+            st.session_state.compare_triggered = False
+        if 'prev_selected_books' not in st.session_state:
+            st.session_state.prev_selected_books = []
+        
         col1, col2 = st.columns([3, 1])
         
         with col1:
             selected_books = st.multiselect(
                 "搜索并选择要对比的图书（2-4本）",
                 book_options,
-                default=book_options[:2],
+                default=[],
                 key='book_compare_select'
             )
+            
+            if selected_books != st.session_state.prev_selected_books:
+                st.session_state.compare_triggered = False
+                st.session_state.prev_selected_books = selected_books
             
             selected_isbns = [opt.split('(')[-1].rstrip(')') for opt in selected_books]
             
@@ -941,11 +950,11 @@ elif page == "📖 单品分析":
         with col2:
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("📊 开始对比", width='stretch', disabled=len(selected_isbns) < 2 or len(selected_isbns) > 4):
-                pass
+                st.session_state.compare_triggered = True
         
         st.markdown("---")
         
-        if 2 <= len(selected_isbns) <= 4:
+        if st.session_state.compare_triggered and 2 <= len(selected_isbns) <= 4:
             compare_data = get_multiple_books_data(sales_df, books_df, ratings_df, selected_isbns)
             monthly_sales = compare_data['monthly_sales']
             comparison_df = compare_data['comparison']
