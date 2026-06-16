@@ -119,21 +119,28 @@ if page == "📊 销售趋势分析":
     with col1:
         start_year = st.selectbox("开始年份", available_years, index=0, key='start_year')
     with col2:
-        start_month = st.selectbox("开始月份", get_available_months(), index=0, key='start_month')
+        start_month = st.selectbox("开始月份", get_available_months(), index=0, key='start_month', format_func=lambda x: f"{x}月")
     with col3:
         end_year = st.selectbox("结束年份", available_years, index=len(available_years)-1, key='end_year')
     with col4:
-        end_month = st.selectbox("结束月份", get_available_months(), index=11, key='end_month')
+        end_month = st.selectbox("结束月份", get_available_months(), index=11, key='end_month', format_func=lambda x: f"{x}月")
     
     categories = ['全部'] + list(CATEGORY_COLORS.keys())
     selected_category = st.selectbox("选择图书品类", categories, index=0, key='trend_category')
     
+    start_total = start_year * 12 + start_month
+    end_total = end_year * 12 + end_month
+    date_invalid = start_total > end_total
+    
+    if date_invalid:
+        st.warning("⚠️ 开始日期晚于结束日期，系统已自动调整为正确的时间范围")
+    
     filtered_sales = filter_sales_by_date(sales_df, books_df, start_year, start_month, end_year, end_month)
     
-    total_sales = filtered_sales['销量'].sum()
-    total_revenue = filtered_sales['营收'].sum()
-    avg_order_value = total_revenue / total_sales if total_sales > 0 else 0
-    unique_books = filtered_sales['ISBN'].nunique()
+    total_sales = int(filtered_sales['销量'].sum())
+    total_revenue = float(filtered_sales['营收'].sum())
+    avg_order_value = total_revenue / total_sales if total_sales > 0 else 0.0
+    unique_books = int(filtered_sales['ISBN'].nunique())
     
     mcol1, mcol2, mcol3, mcol4 = st.columns(4)
     with mcol1:
@@ -172,139 +179,150 @@ if page == "📊 销售趋势分析":
     st.markdown("---")
     
     monthly_trend = get_monthly_sales_trend(filtered_sales, selected_category)
+    has_data = len(monthly_trend) > 0
     
-    tab1, tab2 = st.tabs(["📈 销量趋势", "💰 营收趋势"])
-    
-    with tab1:
-        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-        fig_sales = go.Figure()
+    if not has_data:
+        st.info("📭 所选时间范围内没有销售数据，请调整日期范围")
+    else:
+        tab1, tab2 = st.tabs(["📈 销量趋势", "💰 营收趋势"])
         
-        if selected_category == '全部':
-            for cat in CATEGORY_COLORS.keys():
-                cat_data = monthly_trend[monthly_trend['品类'] == cat]
-                if len(cat_data) > 0:
-                    fig_sales.add_trace(go.Scatter(
-                        x=cat_data['年月'],
-                        y=cat_data['销量'],
-                        mode='lines+markers',
-                        name=cat,
-                        line=dict(color=CATEGORY_COLORS[cat], width=3),
-                        marker=dict(size=8, line=dict(width=2, color='white'))
-                    ))
+        with tab1:
+            st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+            fig_sales = go.Figure()
+            
+            if selected_category == '全部':
+                for cat in CATEGORY_COLORS.keys():
+                    cat_data = monthly_trend[monthly_trend['品类'] == cat]
+                    if len(cat_data) > 0:
+                        fig_sales.add_trace(go.Scatter(
+                            x=cat_data['年月'],
+                            y=cat_data['销量'],
+                            mode='lines+markers',
+                            name=cat,
+                            line=dict(color=CATEGORY_COLORS[cat], width=3),
+                            marker=dict(size=8, line=dict(width=2, color='white'))
+                        ))
+            else:
+                cat_color = CATEGORY_COLORS.get(selected_category, '#667eea')
+                fig_sales.add_trace(go.Scatter(
+                    x=monthly_trend['年月'],
+                    y=monthly_trend['销量'],
+                    mode='lines+markers',
+                    name=selected_category,
+                    line=dict(color=cat_color, width=3),
+                    marker=dict(size=10, line=dict(width=2, color='white')),
+                    fill='tonexty',
+                    fillcolor=f"rgba{tuple(int(cat_color[1:][i:i+2], 16) for i in (0, 2, 4)) + (0.2,)}"
+                ))
+            
+            fig_sales.update_layout(
+                title=f'{selected_category} 月度销量趋势',
+                xaxis_title='月份',
+                yaxis_title='销量（册）',
+                hovermode='x unified',
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                height=500,
+                template='plotly_white'
+            )
+            st.plotly_chart(fig_sales, width='stretch')
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with tab2:
+            st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+            fig_revenue = go.Figure()
+            
+            if selected_category == '全部':
+                for cat in CATEGORY_COLORS.keys():
+                    cat_data = monthly_trend[monthly_trend['品类'] == cat]
+                    if len(cat_data) > 0:
+                        fig_revenue.add_trace(go.Scatter(
+                            x=cat_data['年月'],
+                            y=cat_data['营收'],
+                            mode='lines+markers',
+                            name=cat,
+                            line=dict(color=CATEGORY_COLORS[cat], width=3),
+                            marker=dict(size=8, line=dict(width=2, color='white'))
+                        ))
+            else:
+                cat_color = CATEGORY_COLORS.get(selected_category, '#667eea')
+                fig_revenue.add_trace(go.Scatter(
+                    x=monthly_trend['年月'],
+                    y=monthly_trend['营收'],
+                    mode='lines+markers',
+                    name=selected_category,
+                    line=dict(color=cat_color, width=3),
+                    marker=dict(size=10, line=dict(width=2, color='white')),
+                    fill='tonexty',
+                    fillcolor=f"rgba{tuple(int(cat_color[1:][i:i+2], 16) for i in (0, 2, 4)) + (0.2,)}"
+                ))
+            
+            fig_revenue.update_layout(
+                title=f'{selected_category} 月度营收趋势',
+                xaxis_title='月份',
+                yaxis_title='营收（元）',
+                hovermode='x unified',
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                height=500,
+                template='plotly_white'
+            )
+            st.plotly_chart(fig_revenue, width='stretch')
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+            category_summary = get_category_sales_summary(filtered_sales)
+            
+            if len(category_summary) > 0:
+                fig_cat = px.bar(
+                    category_summary,
+                    x='品类',
+                    y='销量',
+                    color='品类',
+                    color_discrete_map=CATEGORY_COLORS,
+                    title='各品类销量对比',
+                    text='销量',
+                    height=400
+                )
+                fig_cat.update_traces(textposition='outside', texttemplate='%{text:,}')
+                fig_cat.update_layout(showlegend=False, template='plotly_white')
+                st.plotly_chart(fig_cat, width='stretch')
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown('<div class="plot-container">', unsafe_allow_html=True)
+            channel_summary = get_channel_sales(filtered_sales)
+            
+            if len(channel_summary) > 0:
+                fig_channel = px.bar(
+                    channel_summary,
+                    x='渠道',
+                    y='销量',
+                    color='品类',
+                    color_discrete_map=CATEGORY_COLORS,
+                    title='各渠道销量分布（按品类）',
+                    height=400
+                )
+                fig_channel.update_layout(barmode='stack', template='plotly_white')
+                st.plotly_chart(fig_channel, width='stretch')
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("---")
+        st.subheader("📋 品类销售明细")
+        if len(category_summary) > 0:
+            st.dataframe(
+                category_summary.style.format({
+                    '销量': '{:,}',
+                    '营收': '{:,.2f}',
+                    '平均单价': '{:.2f}'
+                }).background_gradient(cmap='Blues', subset=['销量']),
+                width='stretch'
+            )
         else:
-            fig_sales.add_trace(go.Scatter(
-                x=monthly_trend['年月'],
-                y=monthly_trend['销量'],
-                mode='lines+markers',
-                name=selected_category,
-                line=dict(color=CATEGORY_COLORS[selected_category], width=3),
-                marker=dict(size=10, line=dict(width=2, color='white')),
-                fill='tonexty',
-                fillcolor=f"rgba{tuple(int(CATEGORY_COLORS[selected_category][1:][i:i+2], 16) for i in (0, 2, 4)) + (0.2,)}"
-            ))
-        
-        fig_sales.update_layout(
-            title=f'{selected_category} 月度销量趋势',
-            xaxis_title='月份',
-            yaxis_title='销量（册）',
-            hovermode='x unified',
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-            height=500,
-            template='plotly_white'
-        )
-        st.plotly_chart(fig_sales, width='stretch')
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab2:
-        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-        fig_revenue = go.Figure()
-        
-        if selected_category == '全部':
-            for cat in CATEGORY_COLORS.keys():
-                cat_data = monthly_trend[monthly_trend['品类'] == cat]
-                if len(cat_data) > 0:
-                    fig_revenue.add_trace(go.Scatter(
-                        x=cat_data['年月'],
-                        y=cat_data['营收'],
-                        mode='lines+markers',
-                        name=cat,
-                        line=dict(color=CATEGORY_COLORS[cat], width=3),
-                        marker=dict(size=8, line=dict(width=2, color='white'))
-                    ))
-        else:
-            fig_revenue.add_trace(go.Scatter(
-                x=monthly_trend['年月'],
-                y=monthly_trend['营收'],
-                mode='lines+markers',
-                name=selected_category,
-                line=dict(color=CATEGORY_COLORS[selected_category], width=3),
-                marker=dict(size=10, line=dict(width=2, color='white')),
-                fill='tonexty',
-                fillcolor=f"rgba{tuple(int(CATEGORY_COLORS[selected_category][1:][i:i+2], 16) for i in (0, 2, 4)) + (0.2,)}"
-            ))
-        
-        fig_revenue.update_layout(
-            title=f'{selected_category} 月度营收趋势',
-            xaxis_title='月份',
-            yaxis_title='营收（元）',
-            hovermode='x unified',
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-            height=500,
-            template='plotly_white'
-        )
-        st.plotly_chart(fig_revenue, width='stretch')
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-        category_summary = get_category_sales_summary(filtered_sales)
-        
-        fig_cat = px.bar(
-            category_summary,
-            x='品类',
-            y='销量',
-            color='品类',
-            color_discrete_map=CATEGORY_COLORS,
-            title='各品类销量对比',
-            text='销量',
-            height=400
-        )
-        fig_cat.update_traces(textposition='outside', texttemplate='%{text:,}')
-        fig_cat.update_layout(showlegend=False, template='plotly_white')
-        st.plotly_chart(fig_cat, width='stretch')
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown('<div class="plot-container">', unsafe_allow_html=True)
-        channel_summary = get_channel_sales(filtered_sales)
-        
-        fig_channel = px.bar(
-            channel_summary,
-            x='渠道',
-            y='销量',
-            color='品类',
-            color_discrete_map=CATEGORY_COLORS,
-            title='各渠道销量分布（按品类）',
-            height=400
-        )
-        fig_channel.update_layout(barmode='stack', template='plotly_white')
-        st.plotly_chart(fig_channel, width='stretch')
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown("---")
-    st.subheader("📋 品类销售明细")
-    st.dataframe(
-        category_summary.style.format({
-            '销量': '{:,}',
-            '营收': '{:,.2f}',
-            '平均单价': '{:.2f}'
-        }).background_gradient(cmap='Blues', subset=['销量']),
-        width='stretch'
-    )
+            st.info("暂无数据")
 
 elif page == "👥 读者画像分析":
     st.title("👥 读者画像分析")

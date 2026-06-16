@@ -47,15 +47,15 @@ books_df = pd.DataFrame(books)
 books_df.to_csv('data/books.csv', index=False, encoding='utf-8-sig')
 print(f"生成了 {len(books_df)} 本图书信息")
 
-start_date = datetime(2025, 1, 1)
+start_year = 2025
 sales_data = []
 reader_data = []
 rating_data = []
 
-for month in range(12):
-    current_date = start_date + timedelta(days=month * 30)
-    year = current_date.year
-    month_num = current_date.month
+for month_offset in range(12):
+    month_num = month_offset + 1
+    year = start_year
+    current_date = datetime(year, month_num, 1)
     
     for channel in channels:
         channel_factor = {'线上电商': 1.2, '线下书店': 0.8, '馆配': 0.6}[channel]

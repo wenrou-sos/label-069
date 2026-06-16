@@ -13,17 +13,23 @@ def load_data():
 def filter_sales_by_date(sales_df, books_df, start_year, start_month, end_year, end_month):
     sales_with_books = sales_df.merge(books_df[['ISBN', '品类', '书名', '定价']], on='ISBN', how='left')
     
-    def is_in_range(row):
-        if row['年份'] < start_year or row['年份'] > end_year:
-            return False
-        if row['年份'] == start_year and row['月份'] < start_month:
-            return False
-        if row['年份'] == end_year and row['月份'] > end_month:
-            return False
-        return True
+    start_total = start_year * 12 + start_month
+    end_total = end_year * 12 + end_month
     
-    filtered = sales_with_books[sales_with_books.apply(is_in_range, axis=1)].copy()
+    date_swapped = False
+    if start_total > end_total:
+        start_total, end_total = end_total, start_total
+        date_swapped = True
+    
+    sales_with_books['月份序号'] = sales_with_books['年份'] * 12 + sales_with_books['月份']
+    filtered = sales_with_books[
+        (sales_with_books['月份序号'] >= start_total) & 
+        (sales_with_books['月份序号'] <= end_total)
+    ].copy()
+    
     filtered['年月'] = filtered.apply(lambda x: f"{x['年份']}-{x['月份']:02d}", axis=1)
+    filtered = filtered.drop(columns=['月份序号'])
+    
     return filtered
 
 def get_monthly_sales_trend(filtered_sales, category=None):
